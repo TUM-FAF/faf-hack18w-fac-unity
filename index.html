@@ -16,11 +16,17 @@
   AFRAME.registerComponent('markerhandler', {
     
     tick: function () {
-      const newValue = this.el.getAttribute('position');
-      const stringCoords = AFRAME.utils.coordinates.stringify(newValue);
-      if (this.lastValue !== stringCoords) {
-        this.el.emit('positionChanged', newValue);
-        this.lastValue = stringCoords;
+      const newPosition = this.el.getAttribute('position');
+      const newRotation = this.el.getAttribute('rotation');
+      const stringPosCoords = AFRAME.utils.coordinates.stringify(newPosition);
+      const stringRotCoords = AFRAME.utils.coordinates.stringify(newRotation);
+      if (this.lastPosition !== stringPosCoords) {
+        this.el.emit('positionChanged', this.el.object3D.position);
+        this.lastPosition = stringPosCoords;
+      }
+      if (this.lastRotation !== stringRotCoords) {
+        this.el.emit('rotationChanged', this.el.object3D.position);
+        this.lastRotation = stringRotCoords;
       }
     },
 
@@ -29,16 +35,18 @@
 
       markerElem.addEventListener('click', function (ev) {
         if (markerElem.object3D.visible == true && ev.detail.cursorEl) {
-          let bradPosition = this.getAttribute('position');
+          let bradPosition = this.object3D.position;
+          let clickPosition = ev.detail.intersection.point;
 
           var entityEl = document.createElement('a-entity');
           var rand = Math.random();
           entityEl.setAttribute('geometry', {
             primitive: 'sphere',
-            radius: rand,
+            radius: 10
           });
+
           trackEntity('test' + rand, {
-            position: bradPosition,
+            position: clickPosition.clone().sub(bradPosition).normalize().multiplyScalar(100),
             entityEl: entityEl
           });
           addItem(entityEl);
@@ -47,11 +55,12 @@
 
       markerElem.addEventListener('markerFound', function () {
         markerElem.addEventListener('positionChanged', e => {
-          const bradPosition = Object.assign({}, e.detail);
+          const bradPosition = e.detail;
           Object.keys(indexTrack).forEach(function(key) {
             const elem = getEntity(key);
-            const entityPosition = elem.position
-            elem.entityEl.setAttribute('position', entityPosition);
+            const elemPosition = elem.position;
+            
+            elem.entityEl.setAttribute('position', bradPosition.clone().add(elemPosition));
           })
         });
       });
@@ -66,8 +75,15 @@
     return indexTrack[name];
   }
 
+  function getPointInBetweenByPerc(pointA, pointB, percentage) {
+    var dir = pointB.clone().sub(pointA);
+    var len = dir.length();
+    dir = dir.normalize().multiplyScalar(len*percentage);
+    return pointA.clone().add(dir);
+  }
+
   function addItem(entityEl) {
-    document.querySelector('a-scene').appendChild(entityEl);
+    document.querySelector('#animated-model').append(entityEl);
   }
 </script>
 <style>
@@ -80,23 +96,21 @@
   </style>
 
 <body style='margin : 0px; overflow: hidden;'>
-  <input id="treeScale" type="range" value="5" min="0" max="100" onchange="showVal(this.value)">
+  <!-- <input id="treeScale" type="range" value="5" min="0" max="100" onchange="showVal(this.value)"> -->
   <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: true;">
     <a-entity id="myCamera" camera position-listener rotation-listener></a-entity>
-    <!-- <a-camera id="myCamera" position-listener rotation-listener>
-      </a-camera> -->
     <a-assets>
       <a-asset-item id="animated-asset" src="/tree.gltf"></a-asset-item>
     </a-assets>
 
     <a-marker markerhandler emitevents="true" cursor="rayOrigin: mouse" id="animated-marker" preset="hiro">
-      <a-entity rotation="-90 0 0" id="animated-model" gltf-model="#animated-asset" scale=".005 .005 .005">
+      <a-entity rotation="-90 0 0" position="0 0 0" id="animated-model" gltf-model="#animated-asset" scale=".01 .01 .01" opacity="0.5">
+          <!-- <a-sphere color="yellow" radius="10" position="0 0 0"></a-sphere> -->
       </a-entity>
     </a-marker>
   </a-scene>
   <script>
     function showVal(val) {
-      console.log(val);
       const entity = document.querySelector('#animated-model');
       entity.setAttribute('scale', {
         x: val * .001,
